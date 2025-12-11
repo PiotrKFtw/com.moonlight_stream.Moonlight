@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - com.moonlight_stream.Moonlight.json
+      - .github/workflows/ci.yml
+      - '**.patch'
+
+jobs:
+  flatpak:
+    name: Flatpak
+    runs-on: ubuntu-latest
+    container:
+      image: 'ghcr.io/flathub-infra/flatpak-github-actions:gnome-48'
+      options: '--privileged'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: com.moonlight_stream.Moonlight.flatpak
+          manifest-path: com.moonlight_stream.Moonlight.json
+          cache-key: '${{ hashFiles(''com.moonlight_stream.Moonlight.json'') }}'
+
+      - name: Set Release Environment Variables
+        run: |
+          REV=$(cd ".flatpak-builder/git/https_github.com_moonlight-stream_moonlight-qt.git" && git rev-parse HEAD)
+          echo "REV=$REV" >> $GITHUB_ENV
+          NOW="$(date -u +'%Y-%m-%d %H:%M:%S') UTC"
+          echo "NOW=$NOW" >> $GITHUB_ENV
+
+      - name: Update Nightly Release
+        uses: andelf/nightly-release@main
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+        with:
+          tag_name: nightly
+          name: Nightly Release
+          prerelease: true
+          body: |
+            Build date: ${{ env.NOW }}
+            Moonlight commit: [${{ env.REV }}](https://github.com/moonlight-stream/moonlight-qt/commit/${{ env.REV }})
+          files: com.moonlight_stream.Moonlight.flatpak
